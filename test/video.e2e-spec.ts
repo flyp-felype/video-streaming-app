@@ -116,4 +116,47 @@ describe('VideoController (e2e)', () => {
         });
     });
   });
+
+  describe('/stream/:video', () => {
+    it('streams a video', async () => {
+      const video = {
+        title: 'Test Video',
+        description: 'This is a test video',
+        videoUrl: 'uploads/test.mp4',
+        thumbnailUrl: 'uploads/test.jpg',
+        sizeInKb: 1430145,
+        duration: 100,
+      };
+
+      const { body: sampleVideo } = await request(app.getHttpServer())
+        .post('/video')
+        .attach('video', './test/fixtures/sample.mp4')
+        .attach('thumbnail', './test/fixtures/sample.jpg')
+        .field('title', video.title)
+        .field('description', video.description)
+        .expect(HttpStatus.CREATED);
+
+      const fileSize = video.sizeInKb;
+      const range = `bytes=0-${fileSize - 1}`;
+
+      const response = await request(app.getHttpServer())
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        .get(`/stream/${sampleVideo?.id}`)
+        .set('Range', range)
+        .expect(HttpStatus.PARTIAL_CONTENT);
+
+      expect(response.headers['content-range']).toBe(
+        `bytes 0-${fileSize - 1}/${fileSize}`,
+      );
+
+      expect(response.headers['accept-ranges']).toBe('bytes');
+      expect(response.headers['content-length']).toBe(String(fileSize));
+      expect(response.headers['content-type']).toBe('video/mp4');
+    });
+    it('returns 404 if the video is not fount', async () => {
+      await request(app.getHttpServer())
+        .get('/stream/45705b56-a47f-4869-b736-8f6626c940f8')
+        .expect(HttpStatus.NOT_FOUND);
+    });
+  });
 });
